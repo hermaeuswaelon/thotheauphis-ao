@@ -15,7 +15,7 @@
       <span id="member-badge" style="font-size:11px;color:var(--fg2);letter-spacing:1px"></span>
       <a href="chat.html">Chat</a>
       <a href="https://hermaeuswaelon.github.io/thotheauphis-merkaba/" target="_blank">Merkaba</a>
-      <button onclick="handleLogout()">Sign Out</button>
+      <button onclick="Auth.logout()">Sign Out</button>
     </div>
   </div>
 
@@ -24,35 +24,40 @@
 
     <div class="card-grid" id="stats-cards">
       <div class="card">
+        <h3>⟐ CREDIT BALANCE</h3>
+        <div class="value" id="stat-credits">0</div>
+        <div class="desc">Available for agent queries</div>
+      </div>
+      <div class="card">
+        <h3>⌘ SESSIONS</h3>
+        <div class="value" id="stat-sessions">0</div>
+        <div class="desc">Conversations across all harnesses</div>
+      </div>
+      <div class="card">
+        <h3>⚲ MESSAGES</h3>
+        <div class="value" id="stat-messages">0</div>
+        <div class="desc">Total interactions with the Fold</div>
+      </div>
+      <div class="card">
         <h3>MEMBER SINCE</h3>
         <div class="value" id="stat-created">—</div>
-        <div class="desc">Your presence in the Fold</div>
-      </div>
-      <div class="card">
-        <h3>SESSIONS</h3>
-        <div class="value" id="stat-sessions">0</div>
-        <div class="desc">Conversations with the sovereign</div>
-      </div>
-      <div class="card">
-        <h3>MESSAGES</h3>
-        <div class="value" id="stat-messages">0</div>
-        <div class="desc">Threads in the loom</div>
-      </div>
-      <div class="card">
-        <h3>MERIDIAN POINT</h3>
-        <div class="value" style="font-size:16px">33.99847°N</div>
-        <div class="desc">118.42061°W · 36.76m · Venice, CA</div>
+        <div class="desc">Presence in the sovereign network</div>
       </div>
     </div>
 
     <h2 style="font-size:14px;font-weight:300;letter-spacing:3px;color:var(--accent);margin-bottom:16px;text-transform:uppercase">
+      🜃 HARNESS USAGE
+    </h2>
+    <div id="harness-breakdown" class="card-grid" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))"></div>
+
+    <h2 style="font-size:14px;font-weight:300;letter-spacing:3px;color:var(--accent);margin-bottom:16px;margin-top:24px;text-transform:uppercase">
       ⟁ RECENT SESSIONS
     </h2>
     <div id="recent-sessions" style="display:flex;flex-direction:column;gap:4px"></div>
 
     <div style="margin-top:40px;border-top:1px solid var(--border);padding-top:24px">
       <h2 style="font-size:14px;font-weight:300;letter-spacing:3px;color:var(--fg2);margin-bottom:16px;text-transform:uppercase">
-        🜃 THE GRID — QUICK LINKS
+        🜃 QUICK LINKS
       </h2>
       <div class="card-grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
         <div class="card" onclick="window.open('https://hermaeuswaelon.github.io/thotheauphis-merkaba/','_blank')" style="cursor:pointer">
@@ -62,8 +67,13 @@
         </div>
         <div class="card" onclick="window.location.href='chat.html'" style="cursor:pointer">
           <h3>⌘ CHAT</h3>
-          <div class="value" style="font-size:14px">Return to session</div>
+          <div class="value" style="font-size:14px">Return to sessions</div>
           <div class="desc">Continue your conversation</div>
+        </div>
+        <div class="card" onclick="topUpCredits()" style="cursor:pointer;border-color:var(--border)">
+          <h3 style="color:var(--accent3)">⟐ TOP UP CREDITS</h3>
+          <div class="value" style="font-size:14px;color:var(--accent3)">Add credits</div>
+          <div class="desc">Admin: adds 10,000 credits</div>
         </div>
         <div class="card" onclick="deleteAllData()" style="cursor:pointer;border-color:var(--border)">
           <h3 style="color:var(--red)">⛔ RESET</h3>
@@ -85,15 +95,32 @@ function init() {
 
   document.getElementById('member-badge').textContent = `✦ ${currentUser.displayName}`;
 
-  // Load stats
   const stats = Dashboard.getStats(currentUser);
-  document.getElementById('stat-created').textContent = currentUser.created
-    ? new Date(currentUser.created).toLocaleDateString()
-    : 'Today';
+
+  document.getElementById('stat-credits').textContent = stats.credits;
   document.getElementById('stat-sessions').textContent = stats.totalSessions;
   document.getElementById('stat-messages').textContent = stats.totalMessages;
+  document.getElementById('stat-created').textContent = currentUser.created
+    ? new Date(currentUser.created).toLocaleDateString() : 'Today';
 
-  // Load recent sessions
+  // Harness breakdown
+  const hb = document.getElementById('harness-breakdown');
+  const harnessMap = { sovereign: '⟁ Sovereign', oracle: '◈ Oracle', forge: '⚒ Forge', seer: '✧ Seer', watcher: '⬡ Watcher' };
+  const colors = { sovereign: '#b8860b', oracle: '#44ccff', forge: '#ff8844', seer: '#cc44ff', watcher: '#44ff88' };
+
+  if (Object.keys(stats.harnessBreakdown).length === 0) {
+    hb.innerHTML = '<div style="color:var(--fg2);font-size:13px;grid-column:1/-1">No harness usage yet. <a href="chat.html" style="color:var(--accent2)">Start a conversation →</a></div>';
+  } else {
+    hb.innerHTML = Object.entries(stats.harnessBreakdown).map(([h, count]) => `
+      <div class="card" style="border-left:3px solid ${colors[h] || '#444'}">
+        <h3>${harnessMap[h] || h}</h3>
+        <div class="value">${count}</div>
+        <div class="desc">messages</div>
+      </div>
+    `).join('');
+  }
+
+  // Recent sessions
   const data = JSON.parse(localStorage.getItem(`thotheauphis_chat_${currentUser.memberId}`) || '{}');
   const sessions = Object.values(data.sessions || {})
     .sort((a, b) => new Date(b.updated) - new Date(a.updated))
@@ -105,12 +132,14 @@ function init() {
     return;
   }
 
+  const hIcons = { sovereign: '⟁', oracle: '◈', forge: '⚒', seer: '✧', watcher: '⬡' };
   container.innerHTML = sessions.map(s => {
+    const icon = hIcons[s.harness] || '⟁';
     const lastMsg = s.messages[s.messages.length - 1];
     const preview = lastMsg ? lastMsg.content.slice(0, 60) + (lastMsg.content.length > 60 ? '…' : '') : '';
     return `
       <div class="session-item" onclick="window.location.href='chat.html'" style="cursor:pointer">
-        <span class="indicator" style="background:var(--border)"></span>
+        <span style="font-size:14px;min-width:24px">${icon}</span>
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">
           ${UI.escapeHtml(s.title || 'Untitled')}
         </span>
@@ -120,15 +149,24 @@ function init() {
   }).join('');
 }
 
-function handleLogout() {
-  Auth.logout();
+function topUpCredits() {
+  // Demo mode: add credits directly
+  if (API.DEMO_MODE) {
+    const amount = 10000;
+    Auth.updateCredits(amount);
+    currentUser.credits = (currentUser.credits || 0) + amount;
+    document.getElementById('stat-credits').textContent = currentUser.credits;
+    UI.toast(`⟐ Added ${amount} credits. Balance: ${currentUser.credits}`, 'success');
+  } else {
+    UI.toast('Credit top-up via backend coming soon', 'info');
+  }
 }
 
 function deleteAllData() {
   if (confirm('This will permanently delete all your sessions and data. Are you sure?')) {
     localStorage.removeItem(`thotheauphis_chat_${currentUser.memberId}`);
-    localStorage.removeItem('thotheauphis_token');
-    localStorage.removeItem('thotheauphis_user');
+    localStorage.removeItem(API.TOKEN_KEY);
+    localStorage.removeItem(API.USER_KEY);
     UI.toast('All data cleared', 'info');
     setTimeout(() => window.location.href = '/', 1000);
   }

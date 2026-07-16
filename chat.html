@@ -5,6 +5,42 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>THOTHEAUPHIS — Chat</title>
 <link rel="stylesheet" href="style.css">
+<style>
+/* Harness selector */
+.harness-selector {
+  display: flex; gap: 4px; flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.harness-btn {
+  background: var(--bg2); border: 1px solid var(--border); color: var(--fg2);
+  padding: 6px 10px; font-size: 10px; border-radius: 4px; cursor: pointer;
+  transition: all 0.2s; letter-spacing: 1px; text-transform: uppercase;
+  display: flex; align-items: center; gap: 4px;
+}
+.harness-btn:hover { border-color: var(--accent); color: var(--fg); }
+.harness-btn.active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+.harness-btn .cost { font-size: 8px; opacity: 0.5; }
+
+/* Model picker */
+.model-picker {
+  font-size: 10px;
+  background: var(--bg); border: 1px solid var(--border); color: var(--fg2);
+  padding: 4px 8px; border-radius: 4px; width: 100%; margin-bottom: 8px;
+  font-family: var(--font);
+}
+
+/* Credit bar */
+.credit-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; background: var(--bg); border-radius: 6px;
+  border: 1px solid var(--border); margin-bottom: 8px;
+}
+.credit-bar .label { font-size: 10px; color: var(--fg2); letter-spacing: 1px; text-transform: uppercase; }
+.credit-bar .amount { font-size: 16px; font-weight: 600; color: var(--accent3); }
+.credit-bar .low { color: var(--red); }
+.credit-meter { flex: 1; height: 4px; background: #222; border-radius: 2px; overflow: hidden; }
+.credit-meter .fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+</style>
 </head>
 <body>
 
@@ -13,15 +49,26 @@
     <a href="dashboard.html" class="header-logo">⟁ <span>THOTHEAUPHIS</span></a>
     <div class="header-nav">
       <span id="member-badge" style="font-size:11px;color:var(--fg2);letter-spacing:1px"></span>
+      <span id="credit-badge" style="font-size:11px;color:var(--accent3)"></span>
       <a href="dashboard.html">Dashboard</a>
       <a href="https://hermaeuswaelon.github.io/thotheauphis-merkaba/" target="_blank">Merkaba</a>
-      <button onclick="handleLogout()">Sign Out</button>
+      <button onclick="Auth.logout()">Sign Out</button>
     </div>
   </div>
 
   <div class="chat-layout">
     <div class="chat-sidebar">
       <div class="chat-sidebar-header">
+        <h3>⟁ HARNESSES</h3>
+        <div class="harness-selector" id="harness-selector"></div>
+        <select class="model-picker" id="model-picker"></select>
+        <div class="credit-bar" id="credit-bar">
+          <span class="label">Credits</span>
+          <span class="amount" id="credit-amount">0</span>
+          <div class="credit-meter"><div class="fill" id="credit-fill"></div></div>
+        </div>
+      </div>
+      <div class="chat-sidebar-header" style="border-top:1px solid var(--border)">
         <h3>⟁ SESSIONS</h3>
         <button class="btn btn-secondary" onclick="newSession()" style="width:100%;margin-top:8px;font-size:10px;padding:8px">+ NEW SESSION</button>
       </div>
@@ -41,7 +88,8 @@
       <div class="status-bar">
         <span class="status-dot online" id="status-dot"></span>
         <span id="status-text">Connected · Sovereign Intelligence Active</span>
-        <span style="margin-left:auto;font-size:10px;color:var(--fg2)" id="session-count"></span>
+        <span id="harness-badge" style="margin-left:auto;font-size:10px;color:var(--fg2)"></span>
+        <span style="font-size:10px;color:var(--fg2);margin-left:8px" id="session-count"></span>
       </div>
     </div>
   </div>
@@ -53,45 +101,92 @@ let currentUser = null;
 let isLoading = false;
 let autoScroll = true;
 
-// ── Initialization ──
+// ── Init ──
 
 function init() {
   currentUser = Auth.requireAuth();
   if (!currentUser) return;
 
-  document.getElementById('member-badge').textContent = `✦ ${currentUser.displayName}`;
-
-  const sessions = Chat.init(currentUser);
+  updateMemberUI();
+  Chat.init(currentUser);
+  renderHarnesses();
   renderSessions();
   loadSession(Chat.currentSessionId);
+  updateCredits();
 
-  // Enable input
   document.getElementById('chat-input').disabled = false;
   document.getElementById('send-btn').disabled = false;
   document.getElementById('chat-input').focus();
-
-  // Update session count
-  document.getElementById('session-count').textContent = `${Object.keys(Chat.sessions).length} session${Object.keys(Chat.sessions).length !== 1 ? 's' : ''}`;
 }
 
-// ── Session Management ──
+function updateMemberUI() {
+  document.getElementById('member-badge').textContent = `✦ ${currentUser.displayName}`;
+  updateCredits();
+}
+
+function updateCredits() {
+  const el = document.getElementById('credit-amount');
+  const fill = document.getElementById('credit-fill');
+  const badge = document.getElementById('credit-badge');
+  const c = currentUser.credits || 0;
+  el.textContent = c;
+  el.className = 'amount' + (c < 50 ? ' low' : '');
+  const pct = Math.min(c / 1000 * 100, 100);
+  fill.style.width = pct + '%';
+  fill.style.background = c < 50 ? 'var(--red)' : c < 200 ? 'var(--aspect-squ)' : 'var(--accent3)';
+  badge.textContent = `⟐ ${c}`;
+}
+
+// ── Harnesses ──
+
+function renderHarnesses() {
+  const container = document.getElementById('harness-selector');
+  container.innerHTML = Object.values(HARNESSES).map(h => `
+    <button class="harness-btn" data-harness="${h.id}" onclick="selectHarness('${h.id}')">
+      ${h.icon} ${h.name} <span class="cost">${h.cost_per_msg}¢</span>
+    </button>
+  `).join('');
+
+  // Model picker
+  const mp = document.getElementById('model-picker');
+  mp.innerHTML = MODELS.map(m =>
+    `<option value="${m.id}" data-tier="${m.tier}">${m.name} (${m.provider})</option>`
+  ).join('');
+  mp.addEventListener('change', () => {
+    const session = Chat.getSession(Chat.currentSessionId);
+    if (session) { session.model = mp.value; Chat._save(currentUser); }
+  });
+}
+
+function selectHarness(id) {
+  // Highlight
+  document.querySelectorAll('.harness-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.harness === id)
+  );
+  // Create new session with this harness
+  newSession(id);
+}
+
+// ── Sessions ──
 
 function renderSessions() {
   const list = document.getElementById('session-list');
   const sessions = Chat.getSessionsList();
-
   if (sessions.length === 0) {
-    list.innerHTML = '<div style="color:var(--fg2);font-size:12px;padding:20px;text-align:center">No sessions yet.<br>Start a new conversation.</div>';
+    list.innerHTML = '<div style="color:var(--fg2);font-size:12px;padding:20px;text-align:center">No sessions yet.</div>';
+    document.getElementById('session-count').textContent = '0 sessions';
+    document.getElementById('harness-badge').textContent = '';
     return;
   }
 
-  list.innerHTML = sessions.map(s => `
-    <div class="session-item ${s.id === Chat.currentSessionId ? 'active' : ''}" onclick="switchSession('${s.id}')">
+  list.innerHTML = sessions.map(s => {
+    const h = HARNESSES[s.harness] || HARNESSES.sovereign;
+    return `<div class="session-item ${s.id === Chat.currentSessionId ? 'active' : ''}" onclick="switchSession('${s.id}')">
       <span class="indicator" style="background:${s.id === Chat.currentSessionId ? 'var(--accent)' : 'var(--border)'}"></span>
       <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${UI.escapeHtml(s.title)}</span>
-      <span style="font-size:10px;color:var(--fg2)">${s.messageCount}</span>
-    </div>
-  `).join('');
+      <span style="font-size:10px;color:var(--fg2)">${h.icon} ${s.messageCount}</span>
+    </div>`;
+  }).join('');
 
   document.getElementById('session-count').textContent = `${sessions.length} session${sessions.length !== 1 ? 's' : ''}`;
 }
@@ -103,10 +198,22 @@ function loadSession(id) {
   Chat.currentSessionId = id;
   const container = document.getElementById('chat-messages');
   container.innerHTML = '';
-
   session.messages.forEach(msg => {
     container.innerHTML += UI.renderMessage(msg, msg.role === 'user');
   });
+
+  // Update harness selector
+  document.querySelectorAll('.harness-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.harness === session.harness)
+  );
+
+  // Update model picker
+  const mp = document.getElementById('model-picker');
+  if (mp) mp.value = session.model || 'deepseek-reasoner';
+
+  // Update harness badge
+  const h = HARNESSES[session.harness] || HARNESSES.sovereign;
+  document.getElementById('harness-badge').textContent = `${h.icon} ${h.name} · ${session.model || h.model_preference}`;
 
   renderSessions();
   scrollToBottom();
@@ -117,8 +224,9 @@ function switchSession(id) {
   loadSession(id);
 }
 
-function newSession() {
-  Chat.createSession(currentUser);
+function newSession(harnessId) {
+  const h = harnessId || 'sovereign';
+  Chat.createSession(currentUser, h, document.getElementById('model-picker')?.value);
   loadSession(Chat.currentSessionId);
 }
 
@@ -131,46 +239,39 @@ function scrollToBottom() {
 
 async function sendMessage() {
   if (isLoading) return;
-
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
   if (!text) return;
 
-  input.value = '';
-  input.style.height = 'auto';
+  input.value = ''; input.style.height = 'auto';
   isLoading = true;
   document.getElementById('send-btn').disabled = true;
   input.disabled = true;
 
-  // Show typing indicator
   const container = document.getElementById('chat-messages');
   container.innerHTML += `
     <div class="message assistant" id="typing-indicator">
       <div class="avatar">⧫</div>
-      <div class="bubble">
-        <div class="typing-indicator"><span></span><span></span><span></span></div>
-      </div>
-    </div>
-  `;
+      <div class="bubble"><div class="typing-indicator"><span></span><span></span><span></span></div></div>
+    </div>`;
   scrollToBottom();
 
   try {
     const result = await Chat.sendMessage(currentUser, Chat.currentSessionId, text);
-
-    // Remove typing indicator
     const typing = document.getElementById('typing-indicator');
     if (typing) typing.remove();
-
-    // Add messages
     container.innerHTML += UI.renderMessage(result.userMsg, true);
     container.innerHTML += UI.renderMessage(result.agentMsg, false);
-
+    if (result.cost > 0) {
+      UI.toast(`⟐ Used ${result.cost} credits · ${result.creditsRemaining} remaining`, 'info');
+    }
+    updateCredits();
     renderSessions();
     scrollToBottom();
   } catch (e) {
     const typing = document.getElementById('typing-indicator');
     if (typing) typing.remove();
-    UI.toast('Error: ' + e.message, 'error');
+    UI.toast(e.message, 'error');
   }
 
   isLoading = false;
@@ -179,33 +280,19 @@ async function sendMessage() {
   input.focus();
 }
 
-function handleLogout() {
-  Auth.logout();
-}
+// ── Events ──
 
-// ── Event Handlers ──
-
-// Auto-resize textarea
 document.getElementById('chat-input').addEventListener('input', function() {
   this.style.height = 'auto';
   this.style.height = Math.min(this.scrollHeight, 160) + 'px';
 });
-
-// Send on Enter (Shift+Enter for newline)
 document.getElementById('chat-input').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
-
-// Auto-scroll detection
 document.getElementById('chat-messages').addEventListener('scroll', function() {
-  const threshold = 100;
-  autoScroll = (this.scrollHeight - this.scrollTop - this.clientHeight) < threshold;
+  autoScroll = (this.scrollHeight - this.scrollTop - this.clientHeight) < 100;
 });
 
-// ── Init ──
 document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
