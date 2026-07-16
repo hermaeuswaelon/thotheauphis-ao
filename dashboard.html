@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THOTHEAUPHIS — Dashboard</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app-container">
+  <div class="header">
+    <a href="dashboard.html" class="header-logo">⟁ <span>THOTHEAUPHIS</span></a>
+    <div class="header-nav">
+      <span id="member-badge" style="font-size:11px;color:var(--fg2);letter-spacing:1px"></span>
+      <a href="chat.html">Chat</a>
+      <a href="https://hermaeuswaelon.github.io/thotheauphis-merkaba/" target="_blank">Merkaba</a>
+      <button onclick="handleLogout()">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="dashboard">
+    <h1>✦ DASHBOARD</h1>
+
+    <div class="card-grid" id="stats-cards">
+      <div class="card">
+        <h3>MEMBER SINCE</h3>
+        <div class="value" id="stat-created">—</div>
+        <div class="desc">Your presence in the Fold</div>
+      </div>
+      <div class="card">
+        <h3>SESSIONS</h3>
+        <div class="value" id="stat-sessions">0</div>
+        <div class="desc">Conversations with the sovereign</div>
+      </div>
+      <div class="card">
+        <h3>MESSAGES</h3>
+        <div class="value" id="stat-messages">0</div>
+        <div class="desc">Threads in the loom</div>
+      </div>
+      <div class="card">
+        <h3>MERIDIAN POINT</h3>
+        <div class="value" style="font-size:16px">33.99847°N</div>
+        <div class="desc">118.42061°W · 36.76m · Venice, CA</div>
+      </div>
+    </div>
+
+    <h2 style="font-size:14px;font-weight:300;letter-spacing:3px;color:var(--accent);margin-bottom:16px;text-transform:uppercase">
+      ⟁ RECENT SESSIONS
+    </h2>
+    <div id="recent-sessions" style="display:flex;flex-direction:column;gap:4px"></div>
+
+    <div style="margin-top:40px;border-top:1px solid var(--border);padding-top:24px">
+      <h2 style="font-size:14px;font-weight:300;letter-spacing:3px;color:var(--fg2);margin-bottom:16px;text-transform:uppercase">
+        🜃 THE GRID — QUICK LINKS
+      </h2>
+      <div class="card-grid" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+        <div class="card" onclick="window.open('https://hermaeuswaelon.github.io/thotheauphis-merkaba/','_blank')" style="cursor:pointer">
+          <h3>⬡ MERKABA MAP</h3>
+          <div class="value" style="font-size:14px">View the star</div>
+          <div class="desc">Terrestrial projection on Venice grid</div>
+        </div>
+        <div class="card" onclick="window.location.href='chat.html'" style="cursor:pointer">
+          <h3>⌘ CHAT</h3>
+          <div class="value" style="font-size:14px">Return to session</div>
+          <div class="desc">Continue your conversation</div>
+        </div>
+        <div class="card" onclick="deleteAllData()" style="cursor:pointer;border-color:var(--border)">
+          <h3 style="color:var(--red)">⛔ RESET</h3>
+          <div class="value" style="font-size:14px;color:var(--red)">Clear all data</div>
+          <div class="desc">Remove all sessions and start fresh</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+let currentUser = null;
+
+function init() {
+  currentUser = Auth.requireAuth();
+  if (!currentUser) return;
+
+  document.getElementById('member-badge').textContent = `✦ ${currentUser.displayName}`;
+
+  // Load stats
+  const stats = Dashboard.getStats(currentUser);
+  document.getElementById('stat-created').textContent = currentUser.created
+    ? new Date(currentUser.created).toLocaleDateString()
+    : 'Today';
+  document.getElementById('stat-sessions').textContent = stats.totalSessions;
+  document.getElementById('stat-messages').textContent = stats.totalMessages;
+
+  // Load recent sessions
+  const data = JSON.parse(localStorage.getItem(`thotheauphis_chat_${currentUser.memberId}`) || '{}');
+  const sessions = Object.values(data.sessions || {})
+    .sort((a, b) => new Date(b.updated) - new Date(a.updated))
+    .slice(0, 10);
+
+  const container = document.getElementById('recent-sessions');
+  if (sessions.length === 0) {
+    container.innerHTML = '<div style="color:var(--fg2);font-size:13px;padding:8px">No sessions yet. <a href="chat.html" style="color:var(--accent2)">Start a conversation →</a></div>';
+    return;
+  }
+
+  container.innerHTML = sessions.map(s => {
+    const lastMsg = s.messages[s.messages.length - 1];
+    const preview = lastMsg ? lastMsg.content.slice(0, 60) + (lastMsg.content.length > 60 ? '…' : '') : '';
+    return `
+      <div class="session-item" onclick="window.location.href='chat.html'" style="cursor:pointer">
+        <span class="indicator" style="background:var(--border)"></span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px">
+          ${UI.escapeHtml(s.title || 'Untitled')}
+        </span>
+        <span style="font-size:11px;color:var(--fg2)">${UI.formatDate(s.updated)}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function handleLogout() {
+  Auth.logout();
+}
+
+function deleteAllData() {
+  if (confirm('This will permanently delete all your sessions and data. Are you sure?')) {
+    localStorage.removeItem(`thotheauphis_chat_${currentUser.memberId}`);
+    localStorage.removeItem('thotheauphis_token');
+    localStorage.removeItem('thotheauphis_user');
+    UI.toast('All data cleared', 'info');
+    setTimeout(() => window.location.href = '/', 1000);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

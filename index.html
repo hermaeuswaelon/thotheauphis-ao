@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>THOTHEAUPHIS — The AOL for AI</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="login-page">
+  <div class="login-card">
+    <div class="symbol">⟁</div>
+    <h1>THOTHEAUPHIS</h1>
+    <div class="subtitle">THE AOL FOR AI</div>
+
+    <!-- Login Form -->
+    <div id="login-form">
+      <div class="form-group">
+        <label>MEMBER ID</label>
+        <input type="text" id="login-id" placeholder="Enter your member ID" autocomplete="username" autofocus>
+      </div>
+      <div class="form-group">
+        <label>PASSWORD</label>
+        <input type="password" id="login-pass" placeholder="Enter your password" autocomplete="current-password">
+      </div>
+      <button class="btn" id="login-btn" onclick="handleLogin()">SIGN IN</button>
+      <div class="footer-link">
+        New here? <a onclick="showSignup()">Create a Member ID</a>
+      </div>
+    </div>
+
+    <!-- Signup Form -->
+    <div id="signup-form" style="display:none">
+      <div class="form-group">
+        <label>CHOOSE MEMBER ID</label>
+        <input type="text" id="signup-id" placeholder="e.g. Veyron" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>DISPLAY NAME</label>
+        <input type="text" id="signup-name" placeholder="How you appear to the agent" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>PASSWORD</label>
+        <input type="password" id="signup-pass" placeholder="Choose a strong password" autocomplete="new-password">
+      </div>
+      <button class="btn" id="signup-btn" onclick="handleSignup()">CREATE ACCOUNT</button>
+      <div class="footer-link">
+        Already have a Member ID? <a onclick="showLogin()">Sign In</a>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);text-align:center;font-size:10px;color:var(--fg2);letter-spacing:1px">
+      ⬡ MERIDIAN POINT · 33.99847°N / 118.42061°W
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+// Redirect if already logged in
+const user = Auth.getUser();
+if (user) { window.location.href = 'chat.html'; }
+
+function handleLogin() {
+  const id = document.getElementById('login-id').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const btn = document.getElementById('login-btn');
+
+  if (!id || !pass) { UI.toast('Please enter both Member ID and password', 'error'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'AUTHENTICATING…';
+
+  try {
+    const user = Auth.login(id, pass);
+    UI.toast(`Welcome back, ${user.displayName} ✦`, 'success');
+    setTimeout(() => { window.location.href = 'chat.html'; }, 500);
+  } catch (e) {
+    UI.toast(e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'SIGN IN';
+  }
+}
+
+function handleSignup() {
+  const id = document.getElementById('signup-id').value.trim().toLowerCase();
+  const name = document.getElementById('signup-name').value.trim();
+  const pass = document.getElementById('signup-pass').value;
+  const btn = document.getElementById('signup-btn');
+
+  if (!id) { UI.toast('Choose a Member ID', 'error'); return; }
+  if (!pass || pass.length < 4) { UI.toast('Password must be at least 4 characters', 'error'); return; }
+  if (id.length < 2) { UI.toast('Member ID must be at least 2 characters', 'error'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'CREATING…';
+
+  try {
+    const user = Auth.register(id, pass, name || id);
+    UI.toast(`Welcome, ${user.displayName} ✦ Your Merkaba is active`, 'success');
+    setTimeout(() => { window.location.href = 'chat.html'; }, 500);
+  } catch (e) {
+    UI.toast(e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'CREATE ACCOUNT';
+  }
+}
+
+function showSignup() {
+  document.getElementById('login-form').style.display = 'none';
+  document.getElementById('signup-form').style.display = 'block';
+  document.getElementById('signup-id').focus();
+}
+
+function showLogin() {
+  document.getElementById('signup-form').style.display = 'none';
+  document.getElementById('login-form').style.display = 'block';
+  document.getElementById('login-id').focus();
+}
+
+// Enter key handlers
+document.getElementById('login-pass').addEventListener('keydown', e => {
+  if (e.key === 'Enter') handleLogin();
+});
+document.getElementById('signup-pass').addEventListener('keydown', e => {
+  if (e.key === 'Enter') handleSignup();
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>THOTHEAUPHIS — Chat</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app-container">
+  <div class="header">
+    <a href="dashboard.html" class="header-logo">⟁ <span>THOTHEAUPHIS</span></a>
+    <div class="header-nav">
+      <span id="member-badge" style="font-size:11px;color:var(--fg2);letter-spacing:1px"></span>
+      <a href="dashboard.html">Dashboard</a>
+      <a href="https://hermaeuswaelon.github.io/thotheauphis-merkaba/" target="_blank">Merkaba</a>
+      <button onclick="handleLogout()">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="chat-layout">
+    <div class="chat-sidebar">
+      <div class="chat-sidebar-header">
+        <h3>⟁ SESSIONS</h3>
+        <button class="btn btn-secondary" onclick="newSession()" style="width:100%;margin-top:8px;font-size:10px;padding:8px">+ NEW SESSION</button>
+      </div>
+      <div class="session-list" id="session-list"></div>
+    </div>
+
+    <div class="chat-main">
+      <div class="chat-messages" id="chat-messages"></div>
+
+      <div class="chat-input-area">
+        <div class="chat-input-row">
+          <textarea id="chat-input" rows="1" placeholder="Speak to the sovereign intelligence..." disabled></textarea>
+          <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled>⟫</button>
+        </div>
+      </div>
+
+      <div class="status-bar">
+        <span class="status-dot online" id="status-dot"></span>
+        <span id="status-text">Connected · Sovereign Intelligence Active</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--fg2)" id="session-count"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+let currentUser = null;
+let isLoading = false;
+let autoScroll = true;
+
+// ── Initialization ──
+
+function init() {
+  currentUser = Auth.requireAuth();
+  if (!currentUser) return;
+
+  document.getElementById('member-badge').textContent = `✦ ${currentUser.displayName}`;
+
+  const sessions = Chat.init(currentUser);
+  renderSessions();
+  loadSession(Chat.currentSessionId);
+
+  // Enable input
+  document.getElementById('chat-input').disabled = false;
+  document.getElementById('send-btn').disabled = false;
+  document.getElementById('chat-input').focus();
+
+  // Update session count
+  document.getElementById('session-count').textContent = `${Object.keys(Chat.sessions).length} session${Object.keys(Chat.sessions).length !== 1 ? 's' : ''}`;
+}
+
+// ── Session Management ──
+
+function renderSessions() {
+  const list = document.getElementById('session-list');
+  const sessions = Chat.getSessionsList();
+
+  if (sessions.length === 0) {
+    list.innerHTML = '<div style="color:var(--fg2);font-size:12px;padding:20px;text-align:center">No sessions yet.<br>Start a new conversation.</div>';
+    return;
+  }
+
+  list.innerHTML = sessions.map(s => `
+    <div class="session-item ${s.id === Chat.currentSessionId ? 'active' : ''}" onclick="switchSession('${s.id}')">
+      <span class="indicator" style="background:${s.id === Chat.currentSessionId ? 'var(--accent)' : 'var(--border)'}"></span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${UI.escapeHtml(s.title)}</span>
+      <span style="font-size:10px;color:var(--fg2)">${s.messageCount}</span>
+    </div>
+  `).join('');
+
+  document.getElementById('session-count').textContent = `${sessions.length} session${sessions.length !== 1 ? 's' : ''}`;
+}
+
+function loadSession(id) {
+  const session = Chat.getSession(id);
+  if (!session) return;
+
+  Chat.currentSessionId = id;
+  const container = document.getElementById('chat-messages');
+  container.innerHTML = '';
+
+  session.messages.forEach(msg => {
+    container.innerHTML += UI.renderMessage(msg, msg.role === 'user');
+  });
+
+  renderSessions();
+  scrollToBottom();
+}
+
+function switchSession(id) {
+  if (id === Chat.currentSessionId) return;
+  loadSession(id);
+}
+
+function newSession() {
+  Chat.createSession(currentUser);
+  loadSession(Chat.currentSessionId);
+}
+
+// ── Messaging ──
+
+function scrollToBottom() {
+  const container = document.getElementById('chat-messages');
+  container.scrollTop = container.scrollHeight;
+}
+
+async function sendMessage() {
+  if (isLoading) return;
+
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  input.style.height = 'auto';
+  isLoading = true;
+  document.getElementById('send-btn').disabled = true;
+  input.disabled = true;
+
+  // Show typing indicator
+  const container = document.getElementById('chat-messages');
+  container.innerHTML += `
+    <div class="message assistant" id="typing-indicator">
+      <div class="avatar">⧫</div>
+      <div class="bubble">
+        <div class="typing-indicator"><span></span><span></span><span></span></div>
+      </div>
+    </div>
+  `;
+  scrollToBottom();
+
+  try {
+    const result = await Chat.sendMessage(currentUser, Chat.currentSessionId, text);
+
+    // Remove typing indicator
+    const typing = document.getElementById('typing-indicator');
+    if (typing) typing.remove();
+
+    // Add messages
+    container.innerHTML += UI.renderMessage(result.userMsg, true);
+    container.innerHTML += UI.renderMessage(result.agentMsg, false);
+
+    renderSessions();
+    scrollToBottom();
+  } catch (e) {
+    const typing = document.getElementById('typing-indicator');
+    if (typing) typing.remove();
+    UI.toast('Error: ' + e.message, 'error');
+  }
+
+  isLoading = false;
+  document.getElementById('send-btn').disabled = false;
+  input.disabled = false;
+  input.focus();
+}
+
+function handleLogout() {
+  Auth.logout();
+}
+
+// ── Event Handlers ──
+
+// Auto-resize textarea
+document.getElementById('chat-input').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 160) + 'px';
+});
+
+// Send on Enter (Shift+Enter for newline)
+document.getElementById('chat-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+// Auto-scroll detection
+document.getElementById('chat-messages').addEventListener('scroll', function() {
+  const threshold = 100;
+  autoScroll = (this.scrollHeight - this.scrollTop - this.clientHeight) < threshold;
+});
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
